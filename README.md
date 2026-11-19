@@ -6,40 +6,17 @@ An end-to-end, self-hosted Security Operations Center (SOC) and Security Orchest
 
 ## Architecture Overview
 
-```text
-+-----------------------------------+        +-----------------------------------+
-|      Monitored Endpoints          |        |    OpenWrt Perimeter Router       |
-|   (Linux / Windows Wazuh Agents)  |        |   (Firewall & Suricata Telemetry) |
-+-----------------+-----------------+        +-----------------+-----------------+
-                  |                                            |
-                  |  Encrypted Syslog / Agent Telemetry        |  WireGuard VPN Tunnel
-                  +---------------------+----------------------+
-                                        |
-                                        v
-+---------------------------------------------------------------------------------+
-|                 Oracle Cloud Infrastructure (OCI) Ubuntu Instance               |
-|                                                                                 |
-|  +-------------------------+       +-----------------------------------------+  |
-|  |    Suricata IDS/IPS     |------>|               Wazuh SIEM                |  |
-|  | (Network Packet & Flow  | EVE   |  - Log Ingestion & Correlation Engine   |  |
-|  |  Signature Inspection)  | JSON  |  - Custom Detection Rules (MITRE ATT&CK)|  |
-|  +-------------------------+       +--------------------+--------------------+  |
-|                                                         |                       |
-|                                                         | JSON Webhook Alert    |
-|                                                         v                       |
-|                                    +-----------------------------------------+  |
-|                                    |           n8n SOAR Engine               |  |
-|                                    |  1. Parse & Filter Severity Threshold   |  |
-|                                    |  2. Extract IOCs (Src IP, Rule, MITRE)  |  |
-|                                    |  3. Format Structured Incident Payload  |  |
-|                                    +--------------------+--------------------+  |
-+---------------------------------------------------------|-----------------------+
-                                                          | HTTPS POST (Bot API)
-                                                          v
-                                     +-----------------------------------------+
-                                     |           Telegram SOC Bot              |
-                                     |  Real-Time Mobile & Desktop Alerting    |
-                                     +-----------------------------------------+
+```mermaid
+flowchart LR
+    A["Monitored Endpoints<br/>(Wazuh Agents)"] -->|Encrypted Agent Telemetry| C
+    B["OpenWrt Perimeter Router<br/>(Firewall & IDS Logs)"] -->|WireGuard VPN Tunnel| C
+
+    subgraph OCI ["Oracle Cloud Infrastructure (OCI) Ubuntu Instance"]
+        C["Suricata IDS/IPS<br/>(EVE JSON Inspection)"] --> D["Wazuh SIEM<br/>(Correlation & MITRE ATT&CK)"]
+        D -->|JSON Webhook Level 10+| E["n8n SOAR Engine<br/>(Filter, Enrich & Format)"]
+    end
+
+    E -->|HTTPS Bot API| F["Telegram SOC Bot<br/>(Real-Time Incident Alerts)"]
 ```
 
 ---
@@ -67,11 +44,28 @@ An end-to-end, self-hosted Security Operations Center (SOC) and Security Orchest
 
 ---
 
+## Automated Incident Alert Preview
+
+When Wazuh triggers a rule at **Level 10 or higher**, the n8n SOAR workflow parses the JSON payload and dispatches a structured incident card to Telegram:
+
+> 🚨 **[SOC ALERT - CRITICAL]**
+>
+> **Rule:** Critical SSH Brute Force Attack: 8+ failed login attempts from 203.0.113.45 (ID: 100103)  
+> **Severity Level:** 12/15  
+> **Agent / Sensor:** edge-gateway-01 (198.51.100.10)  
+> **Source IP:** `203.0.113.45`  
+> **Destination IP:** `198.51.100.10`  
+> **MITRE ATT&CK:** T1110.001 (Credential Access)  
+> **Timestamp:** 2026-11-19T16:10:00.000Z
+
+---
+
 ## Repository Structure
 
 ```text
 oci-wazuh-suricata-soar/
 ├── README.md                              # Project architecture & setup documentation
+├── LICENSE                                # MIT License
 ├── docker-compose.yml                     # Sanitized multi-container deployment stack
 ├── .env.example                           # Environment variable template (no live secrets)
 ├── wazuh-telegram-soar-workflow.json      # Exported n8n SOAR automation workflow
