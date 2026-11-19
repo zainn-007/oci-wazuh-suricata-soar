@@ -7,16 +7,16 @@ An end-to-end, self-hosted Security Operations Center (SOC) and Security Orchest
 ## Architecture Overview
 
 ```mermaid
-flowchart LR
-    A["Monitored Endpoints<br/>(Wazuh Agents)"] -->|Encrypted Agent Telemetry| C
-    B["OpenWrt Perimeter Router<br/>(Firewall & IDS Logs)"] -->|WireGuard VPN Tunnel| C
+graph LR
+    A[Monitored Endpoints<br>Wazuh Agents] -->|Encrypted Telemetry| C[Suricata IDS/IPS<br>EVE JSON Inspection]
+    B[OpenWrt Perimeter Router<br>Firewall and IDS Logs] -->|WireGuard VPN Tunnel| C
 
-    subgraph OCI ["Oracle Cloud Infrastructure (OCI) Ubuntu Instance"]
-        C["Suricata IDS/IPS<br/>(EVE JSON Inspection)"] --> D["Wazuh SIEM<br/>(Correlation & MITRE ATT&CK)"]
-        D -->|JSON Webhook Level 10+| E["n8n SOAR Engine<br/>(Filter, Enrich & Format)"]
+    subgraph OCI [Oracle Cloud Infrastructure Ubuntu Instance]
+        C --> D[Wazuh SIEM<br>Correlation and MITRE ATTCK]
+        D -->|JSON Webhook Severity 10| E[n8n SOAR Engine<br>Filter Enrich and Format]
     end
 
-    E -->|HTTPS Bot API| F["Telegram SOC Bot<br/>(Real-Time Incident Alerts)"]
+    E -->|HTTPS Bot API| F[Telegram SOC Bot<br>Real-Time Incident Alerts]
 ```
 
 ---
