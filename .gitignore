@@ -1,0 +1,21 @@
+# Environment & Secrets
+.env
+*.env
+!.env.example
+
+# Keys & Certificates
+*.pem
+*.key
+*.crt
+*.p12
+certs/
+
+# Local Volumes & Logs
+wazuh-indexer-data/
+n8n-data/
+*.log
+
+# OS / IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
