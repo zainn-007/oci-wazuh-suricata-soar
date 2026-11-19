@@ -1,0 +1,109 @@
+services:
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:4.14.10
+    container_name: wazuh-indexer
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9200:9200"
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "bootstrap.memory_lock=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ./config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml:ro
+      - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml:ro
+    networks:
+      - soc-net
+
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.14.10
+    container_name: wazuh-manager
+    hostname: wazuh.manager
+    restart: unless-stopped
+    depends_on:
+      - wazuh.indexer
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "127.0.0.1:55000:55000"
+    environment:
+      - INDEXER_URL=https://wazuh.indexer:9200
+      - INDEXER_USERNAME=${WAZUH_INDEXER_USER}
+      - INDEXER_PASSWORD=${WAZUH_INDEXER_PASSWORD}
+      - FILEBEAT_SSL_VERIFICATION_MODE=none
+      - API_USERNAME=${WAZUH_API_USER}
+      - API_PASSWORD=${WAZUH_API_PASSWORD}
+    volumes:
+      - wazuh-api-configuration:/var/ossec/api/configuration
+      - wazuh-etc:/var/ossec/etc
+      - wazuh-logs:/var/ossec/logs
+      - wazuh-queue:/var/ossec/queue
+      - ./config/wazuh-custom-rules.xml:/var/ossec/etc/rules/local_rules.xml:ro
+    networks:
+      - soc-net
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.14.10
+    container_name: wazuh-dashboard
+    hostname: wazuh.dashboard
+    restart: unless-stopped
+    depends_on:
+      - wazuh.indexer
+      - wazuh.manager
+    ports:
+      - "127.0.0.1:5601:5601"
+    environment:
+      - INDEXER_USERNAME=${WAZUH_INDEXER_USER}
+      - INDEXER_PASSWORD=${WAZUH_INDEXER_PASSWORD}
+      - WAZUH_API_URL=https://wazuh.manager
+      - DASHBOARD_USERNAME=${WAZUH_DASHBOARD_USER}
+      - DASHBOARD_PASSWORD=${WAZUH_DASHBOARD_PASSWORD}
+      - API_USERNAME=${WAZUH_API_USER}
+      - API_PASSWORD=${WAZUH_API_PASSWORD}
+    volumes:
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+    networks:
+      - soc-net
+
+  n8n.soar:
+    image: docker.io/n8nio/n8n:2.43.5
+    container_name: n8n-soar
+    hostname: n8n.soar
+    restart: unless-stopped
+    depends_on:
+      - wazuh.manager
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - GENERIC_TIMEZONE=${TIMEZONE}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    volumes:
+      - n8n-data:/home/node/.n8n
+    networks:
+      - soc-net
+
+volumes:
+  wazuh-indexer-data:
+  wazuh-api-configuration:
+  wazuh-etc:
+  wazuh-logs:
+  wazuh-queue:
+  wazuh-dashboard-config:
+  n8n-data:
+
+networks:
+  soc-net:
+    driver: bridge
