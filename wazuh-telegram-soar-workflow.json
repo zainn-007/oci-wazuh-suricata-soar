@@ -1,0 +1,124 @@
+{
+  "name": "Wazuh & Suricata SOC Alerting to Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-alert",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Wazuh Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "wazuh-soc-ingest"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-severity-threshold",
+              "leftValue": "={{ $json.body.rule.level }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Filter High/Critical Severity (>= 10)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const alert = $input.first().json.body || {};\nconst rule = alert.rule || {};\nconst agent = alert.agent || {};\nconst data = alert.data || {};\nconst mitre = rule.mitre || {};\n\nconst level = rule.level || 0;\nconst severityTag = level >= 12 ? 'CRITICAL' : 'HIGH';\nconst srcIp = data.srcip || data.src_ip || 'N/A';\nconst dstIp = data.dstip || data.dest_ip || 'N/A';\nconst mitreIds = Array.isArray(mitre.id) ? mitre.id.join(', ') : 'Unmapped';\nconst mitreTactics = Array.isArray(mitre.tactic) ? mitre.tactic.join(', ') : 'N/A';\n\nconst message = [\n  `🚨 *[SOC ALERT - ${severityTag}]*`,\n  ``,\n  `*Rule:* ${rule.description || 'Security Event Detected'} (ID: ${rule.id || 'N/A'})`,\n  `*Severity Level:* ${level}/15`,\n  `*Agent / Sensor:* ${agent.name || 'Unknown'} (${agent.ip || 'Internal'})`,\n  `*Source IP:* \\`${srcIp}\\``,\n  `*Destination IP:* \\`${dstIp}\\``,\n  `*MITRE ATT&CK:* ${mitreIds} (${mitreTactics})`,\n  `*Timestamp:* ${alert.timestamp || new Date().toISOString()}`\n].join('\\n');\n\nreturn [{ json: { formattedMessage: message, severityTag, ruleId: rule.id } }];"
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Enrich & Format SOC Incident",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 240]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.formattedMessage }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Send Telegram SOC Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [960, 240],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot-cred-placeholder",
+          "name": "SOC Telegram Bot Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Wazuh Alert Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filter High/Critical Severity (>= 10)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter High/Critical Severity (>= 10)": {
+      "main": [
+        [
+          {
+            "node": "Enrich & Format SOC Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich & Format SOC Incident": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram SOC Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "SOAR"
+    },
+    {
+      "name": "Wazuh"
+    }
+  ]
+}
